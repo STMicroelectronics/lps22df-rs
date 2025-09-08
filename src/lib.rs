@@ -149,7 +149,7 @@ impl<B: BusOperation, T: DelayNs> Lps22df<B, T> {
                         break;
                     }
 
-                    //DelayNs.delay_ms(10);
+                    self.tim.delay_ms(10);
 
                     if cnt >= 5 {
                         return Err(Error::UnexpectedValue);
@@ -168,7 +168,7 @@ impl<B: BusOperation, T: DelayNs> Lps22df<B, T> {
                         break;
                     }
 
-                    //DelayNs::delay_us(10);
+                    self.tim.delay_ms(10);
 
                     if cnt >= 5 {
                         return Err(Error::UnexpectedValue);
