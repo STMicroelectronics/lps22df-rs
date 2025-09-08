@@ -39,7 +39,7 @@ fn main() -> ! {
         dp.I2C1,
         (scl, sda),
         Mode::Fast {
-            frequency: 400.kHz(),
+            frequency: 100.kHz(),
             duty_cycle: DutyCycle::Ratio2to1,
         },
         &clocks,
