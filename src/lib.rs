@@ -366,40 +366,123 @@ impl<B: BusOperation, T: DelayNs> Lps22df<B, T> {
     }
     /// Set FIFO operation mode and watermark level.
     ///
-    /// Configures the FIFO_CTRL (0x14) and FIFO_WTM (0x15) registers to select the FIFO operating mode,
-    /// enable triggered FIFO modes, and set the FIFO watermark level. The STOP_ON_WTM bit is set if the
-    /// watermark level is non-zero, limiting FIFO depth to the watermark.
-    pub fn fifo_mode_set(&mut self, val: &FifoMd) -> Result<(), Error<B::Error>> {
+    /// Configures the FIFO_CTRL (0x14) register to select the FIFO operating mode, and
+    /// enable triggered FIFO modes.
+    pub fn fifo_mode_set(&mut self, op: Operation) -> Result<(), Error<B::Error>> {
         let mut fifo_ctrl = FifoCtrl::read(self)?;
-        let mut fifo_wtm = FifoWtm::read(self)?;
 
-        fifo_ctrl.set_f_mode((val.operation as u8) & 0x03);
-        fifo_ctrl.set_trig_modes(((val.operation as u8) & 0x04) >> 2);
+        fifo_ctrl.set_f_mode((op as u8) & 0x03);
+        fifo_ctrl.set_trig_modes(((op as u8) & 0x04) >> 2);
 
-        let stop_on_wtm = if val.watermark != 0 { 1 } else { 0 };
-        fifo_ctrl.set_stop_on_wtm(stop_on_wtm);
-        fifo_wtm.set_wtm(val.watermark);
-
-        fifo_ctrl.write(self)?;
-        fifo_wtm.write(self)?;
-
-        Ok(())
+        fifo_ctrl.write(self)
     }
     /// Get FIFO operation mode and watermark level.
     ///
     /// Reads FIFO_CTRL (0x14) and FIFO_WTM (0x15) registers to retrieve the current FIFO operating mode,
     /// triggered mode status, and watermark level.
-    pub fn fifo_mode_get(&mut self) -> Result<FifoMd, Error<B::Error>> {
+    pub fn fifo_mode_get(&mut self) -> Result<Operation, Error<B::Error>> {
         let fifo_ctrl = FifoCtrl::read(self)?;
-        let fifo_wtm = FifoWtm::read(self)?;
 
         let operation = (fifo_ctrl.trig_modes() << 2) | fifo_ctrl.f_mode();
-        let operation = Operation::try_from(operation).unwrap_or_default();
-        Ok(FifoMd {
-            operation,
-            watermark: fifo_wtm.wtm(),
-        })
+        Ok(Operation::try_from(operation).unwrap_or_default())
     }
+
+    /// Sets the FIFO watermark level.
+    ///
+    /// The FIFO watermark is a programmable threshold that determines when a FIFO threshold interrupt is generated.
+    /// When the number of unread samples in the FIFO buffer reaches or exceeds this level, the device can trigger an interrupt
+    /// (if enabled via the INT_F_WTM bit in CTRL_REG4).
+    ///
+    /// Registers used:
+    /// - Writes to the `FIFO_WTM` (0x15) register, WTM[6:0] field.
+    ///
+    /// # Parameters
+    /// - `val`: Watermark threshold value (0..=127). Each unit corresponds to one FIFO sample (1 sample = 7 bytes: 1 TAG + 6 DATA).
+    ///
+    /// # Returns
+    /// - `Ok(())` on success.
+    /// - `Err`: If the value is out of range or a bus error occurs.
+    ///
+    /// # Panics
+    /// - Panics if `val >= 128` (assertion).
+    ///
+    /// # Example
+    /// ```rust
+    /// sensor.fifo_watermark_set(32)?;
+    /// ```
+    pub fn fifo_watermark_set(&mut self, watermark: u8) -> Result<(), Error<B::Error>> {
+        assert!(watermark < 128);
+
+        let mut fifo_wtm = FifoWtm::read(self)?;
+        fifo_wtm.set_wtm(watermark);
+        fifo_wtm.write(self)
+    }
+
+    /// Retrieves the current FIFO watermark threshold value.
+    ///
+    /// This function reads the FIFO_WTM register and returns the current watermark threshold (WTM[6:0]).
+    /// The watermark determines when the FIFO threshold interrupt is triggered (if enabled).
+    ///
+    /// Registers used:
+    /// - Reads from the `FIFO_WTM` (0x15) register, FTH[6:0] field.
+    ///
+    /// # Returns
+    /// - `Ok(u8)`: The current FIFO watermark threshold (0..=127).
+    /// - `Err`: If a bus or register access error occurs.
+    ///
+    /// # Example
+    /// ```rust
+    /// let wtm = sensor.fifo_watermark_get()?;
+    /// ```
+    pub fn fifo_watermark_get(&mut self) -> Result<u8, Error<B::Error>> {
+        let fifo_wtm = FifoWtm::read(self)?;
+        Ok(fifo_wtm.wtm())
+    }
+
+    /// Enables or disables the FIFO stop-on-watermark feature.
+    ///
+    /// When enabled, the FIFO buffer stops collecting new data once the number of unread samples reaches the watermark threshold.
+    /// This is useful for applications that require precise control over the number of samples collected in the FIFO.
+    /// When disabled, the FIFO continues to collect data, potentially overwriting the oldest samples (depending on FIFO mode).
+    ///
+    /// # Parameters
+    /// - `fth`: `FifoEvent` enum value indicating whether to enable or disable the stop-on-watermark feature.
+    ///
+    /// # Returns
+    /// - `Ok(())` on success.
+    /// - `Err`: If a bus or register access error occurs.
+    ///
+    /// # Example
+    /// ```rust
+    /// sensor.fifo_stop_on_wtm_set(FifoEvent::Enable)?;
+    /// ```
+    pub fn fifo_stop_on_wtm_set(&mut self, fth: FifoEvent) -> Result<(), Error<B::Error>> {
+        let mut fifo_ctrl = FifoCtrl::read(self)?;
+        fifo_ctrl.set_stop_on_wtm(fth as u8);
+        fifo_ctrl.write(self)
+    }
+
+    /// Reads the current status of the FIFO stop-on-watermark feature.
+    ///
+    /// This function checks whether the FIFO is configured to stop collecting data when the watermark threshold is reached.
+    /// Returns the current setting as a `FifoEvent` enum.
+    ///
+    /// Registers used:
+    /// - Reads from the `FIFO_CTRL` (0x14) register, STOP_ON_FTH bit (bit 3)
+    /// # Returns
+    /// - `Ok(FifoEvent)`: Current stop-on-watermark configuration.
+    /// - `Err`: If a bus or register access error occurs.
+    ///
+    /// # Example
+    /// ```rust
+    /// let stop_on_wtm = sensor.fifo_stop_on_wtm_get()?;
+    /// ```
+    pub fn fifo_stop_on_wtm_get(&mut self) -> Result<FifoEvent, Error<B::Error>> {
+        let ctrl = FifoCtrl::read(self)?;
+        let evt = FifoEvent::try_from(ctrl.stop_on_wtm()).unwrap_or_default();
+        Ok(evt)
+    }
+
     /// Get the current number of unread samples stored in FIFO.
     ///
     /// Reads FIFO_STATUS1 (0x25) register which contains the FIFO stored data level (FSS[7:0]).

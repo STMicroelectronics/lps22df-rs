@@ -633,6 +633,25 @@ pub enum ApplyRef {
     RstRefs = 2,
 }
 
+/// Represents the FIFO event types.
+///
+/// # Variants
+///
+/// - `FifoEvWtm`: FIFO watermark event.
+/// - `FifoEvFull`: FIFO full event.
+///
+/// # Description
+///
+/// This enum is used to specify the FIFO event type, allowing for watermark or full event configurations.
+#[repr(u8)]
+#[derive(Clone, Copy, PartialEq, Default, TryFrom)]
+#[try_from(repr)]
+pub enum FifoEvent {
+    #[default]
+    Wtm = 0x0,
+    Full = 0x1,
+}
+
 #[derive(Default)]
 pub struct BusMode {
     pub interface: Interface,
@@ -675,11 +694,6 @@ pub struct Md {
     pub odr: Odr,
     pub avg: Avg,
     pub lpf: LowPassFilter,
-}
-
-pub struct FifoMd {
-    pub operation: Operation,
-    pub watermark: u8,
 }
 
 #[derive(Copy, Clone)]
