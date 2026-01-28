@@ -33,7 +33,7 @@ Add the driver to your `Cargo.toml` dependencies:
 
 ```toml
 [dependencies]
-lps22df-rs = "0.1.0"
+lps22df-rs = "2.0.0"
 ```
 
 Or, add it directly from the terminal:
@@ -44,9 +44,28 @@ cargo add lps22df-rs
 
 ## Usage
 
-Include the crate and its prelude
+By default, the create exposes the **asynchronous** API, and it could be included using:
 ```rust
-use lps22df_rs as lps22df;
+use lps22df_rs::asynchronous as lps22df;
+use lps22df::*;
+use lps22df::prelude::*;
+```
+
+### Blocking API (optional feature)
+
+To use the **blocking** API instead of the asynchronous one, disable default features and enable the `blocking` feature in your Cargo.toml
+```toml
+[dependencies]
+lps22df-rs = { version = "2.0.0", default-features = false, features = ["blocking"] }
+```
+or from the terminal:
+```sh
+cargo add lps22df-rs --no-default-features --features blocking
+```
+
+Then import the blocking API:
+```rust
+use lps22df_rs::blocking as lps22df;
 use lps22df::*;
 use lps22df::prelude::*;
 ```
